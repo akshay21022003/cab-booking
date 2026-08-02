@@ -1,0 +1,279 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// UNIFIED USER MODEL
+// ============================================================
+
+enum CabFacility {
+  PICKUP_ONLY
+  DROP_ONLY
+  BOTH
+}
+
+model User {
+  id                     String      @id @default(cuid())
+  employeeId             String      @unique @map("employee_id")
+  name                   String
+  email                  String?
+  departmentId           String      @map("department_id")
+  costCenterId           String?     @map("cost_center_id")
+  cabFacility            CabFacility @default(BOTH) @map("cab_facility")
+  defaultPickupLocation  String?     @map("default_pickup_location")
+  defaultPickupTime      String?     @map("default_pickup_time") // HH:MM
+  defaultDropLocation    String?     @map("default_drop_location")
+  defaultDropTime        String?     @map("default_drop_time") // HH:MM
+  isActive               Boolean     @default(true) @map("is_active")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  department      Department     @relation(fields: [departmentId], references: [id])
+  costCenter      CostCenter?    @relation(fields: [costCenterId], references: [id])
+  roles           UserRole[]
+  bookings        Booking[]
+  changeRequests  ChangeRequest[]
+  sessions        Session[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]     @relation("AuditActor")
+  departmentAdmin DepartmentAdmin[]
+
+  @@map("users")
+}
+
+// ============================================================
+// ROLE SYSTEM
+// ============================================================
+
+enum Role {
+  USER
+  DEPARTMENT_ADMIN
+  SUPER_ADMIN
+}
+
+model UserRole {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  role         Role
+  departmentId String?  @map("department_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@unique([userId, role, departmentId])
+  @@map("user_roles")
+}
+
+// ============================================================
+// DEPARTMENT & COST CENTERS
+// ============================================================
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  costCenters      CostCenter[]
+  bookings         Booking[]
+  userRoles        UserRole[]
+  departmentAdmins DepartmentAdmin[]
+
+  @@map("departments")
+}
+
+model DepartmentAdmin {
+  id           String   @id @default(cuid())
+  departmentId String   @map("department_id")
+  userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@map("department_admins")
+}
+
+model CostCenter {
+  id           String   @id @default(cuid())
+  name         String
+  code         String   @unique
+  departmentId String   @map("department_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id])
+  users      User[]
+  bookings   Booking[]
+
+  @@map("cost_centers")
+}
+
+// ============================================================
+// BOOKINGS
+// No approval workflow. Employee books → it's confirmed.
+// bookingType determines if it's pickup, drop, or both.
+// Fields are nullable based on bookingType.
+// ============================================================
+
+enum BookingType {
+  PICKUP
+  DROP
+  BOTH
+}
+
+model Booking {
+  id              String      @id @default(cuid())
+  userId          String      @map("user_id")
+  bookingDate     DateTime    @map("booking_date") @db.Date
+  bookingType     BookingType @map("booking_type")
+  pickupLocation  String?     @map("pickup_location")
+  pickupTime      String?     @map("pickup_time") // HH:MM
+  dropLocation    String?     @map("drop_location")
+  dropTime        String?     @map("drop_time") // HH:MM
+  isCancelled     Boolean     @default(false) @map("is_cancelled")
+  departmentId    String      @map("department_id")
+  costCenterId    String?     @map("cost_center_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  user           User            @relation(fields: [userId], references: [id])
+  department     Department      @relation(fields: [departmentId], references: [id])
+  costCenter     CostCenter?     @relation(fields: [costCenterId], references: [id])
+  changeRequests ChangeRequest[]
+
+  // Prevent duplicate booking for same user/date/type
+  @@unique([userId, bookingDate, bookingType], name: "unique_user_date_type")
+  @@index([userId])
+  @@index([bookingDate])
+  @@index([departmentId])
+  @@index([userId, bookingDate])
+  @@map("bookings")
+}
+
+// ============================================================
+// CHANGE REQUESTS
+// Employee raises a request to change booking details.
+// Admin approves or rejects.
+// ============================================================
+
+enum ChangeRequestField {
+  PICKUP_LOCATION
+  DROP_LOCATION
+  PICKUP_TIME
+  DROP_TIME
+  CANCEL_PICKUP
+  CANCEL_DROP
+  CANCEL_BOOKING
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ChangeRequest {
+  id             String              @id @default(cuid())
+  bookingId      String              @map("booking_id")
+  userId         String              @map("user_id")
+  requestedField ChangeRequestField  @map("requested_field")
+  requestedValue String?             @map("requested_value")
+  reason         String?
+  status         ChangeRequestStatus @default(PENDING)
+  adminResponse  String?             @map("admin_response")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("change_requests")
+}
+
+// ============================================================
+// SESSIONS - Permanent until Super Admin revokes
+// ============================================================
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("sessions")
+}
+
+// ============================================================
+// AUDIT LOGS
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  actorId    String   @map("actor_id")
+  oldValue   String?  @map("old_value") @db.Text
+  newValue   String?  @map("new_value") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================
+// EXPORT LOGS
+// ============================================================
+
+model ExportLog {
+  id          String   @id @default(cuid())
+  generatedBy String   @map("generated_by")
+  filters     String?  @db.Text
+  rowCount    Int      @map("row_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("export_logs")
+}
