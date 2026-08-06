@@ -57,8 +57,7 @@ export async function validateSession(): Promise<SessionUser | null> {
 
   return {
     id: session.user.id,
-    employeeId: session.user.employeeId,
-    name: session.user.name,
+    email: session.user.email,
     departmentId: session.user.departmentId,
     roles,
     highestRole,

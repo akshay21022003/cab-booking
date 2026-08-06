@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Car } from 'lucide-react';
+import { loginAction } from '@/lib/actions';
 
 export default function LoginPage() {
-  const [employeeId, setEmployeeId] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -19,21 +20,15 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId: employeeId.toUpperCase() }),
-      });
+      const result = await loginAction({ email: email.toLowerCase().trim() });
 
-      const data = await res.json();
-
-      if (!data.success) {
-        setError(data.error?.message || 'Login failed');
+      if (!result.success) {
+        setError(result.error?.message || 'Login failed');
         return;
       }
 
       // Redirect based on role
-      const role = data.data.highestRole;
+      const role = result.data?.highestRole;
       switch (role) {
         case 'SUPER_ADMIN':
           router.push('/dashboard/super-admin');
@@ -45,7 +40,7 @@ export default function LoginPage() {
           router.push('/dashboard/user');
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -59,19 +54,20 @@ export default function LoginPage() {
             <Car className="h-6 w-6 text-primary" />
             ClariCab
           </CardTitle>
-          <CardDescription>Enter your Employee ID to continue</CardDescription>
+          <CardDescription>Enter your email to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="employeeId" className="text-sm font-medium">
-                Employee ID
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
               </label>
               <Input
-                id="employeeId"
-                placeholder="e.g. EMP001"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
+                id="email"
+                type="email"
+                placeholder="e.g. john@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
                 autoFocus
                 required
@@ -84,13 +80,13 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={isLoading || !employeeId.trim()}>
+            <Button type="submit" className="w-full" disabled={isLoading || !email.trim()}>
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
 
           <div className="mt-6 text-xs text-muted-foreground text-center">
-            <p>No password required. Use your company ID card number.</p>
+            <p>No password required. Use your company email address.</p>
           </div>
         </CardContent>
       </Card>

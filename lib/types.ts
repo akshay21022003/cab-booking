@@ -10,8 +10,7 @@ export type ApiResponse<T> =
 // Session user (attached to request after auth)
 export interface SessionUser {
   id: string;
-  employeeId: string;
-  name: string;
+  email: string;
   departmentId: string;
   roles: Role[];
   highestRole: 'USER' | 'DEPARTMENT_ADMIN' | 'SUPER_ADMIN';

@@ -5,11 +5,10 @@ import { z } from 'zod';
 // ============================================================
 
 export const loginSchema = z.object({
-  employeeId: z
+  email: z
     .string()
-    .min(1, 'Employee ID is required')
-    .max(20, 'Employee ID too long')
-    .regex(/^[A-Z0-9]+$/, 'Employee ID must be uppercase alphanumeric'),
+    .min(1, 'Email is required')
+    .email('Invalid email format'),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -73,13 +72,7 @@ export type UpdateChangeRequestInput = z.infer<typeof updateChangeRequestSchema>
 // ============================================================
 
 export const createUserSchema = z.object({
-  employeeId: z
-    .string()
-    .min(1, 'Required')
-    .max(20)
-    .regex(/^[A-Z0-9]+$/, 'Must be uppercase alphanumeric'),
-  name: z.string().min(2, 'Name required').max(100),
-  email: z.string().email().optional().or(z.literal('')),
+  email: z.string().email('Valid email required'),
   costCenterId: z.string().optional(),
   cabFacility: z.enum(['PICKUP_ONLY', 'DROP_ONLY', 'BOTH']).optional(),
   defaultPickupLocation: z.string().max(200).optional(),

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { SessionUser, Role } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +16,7 @@ import {
   Building2,
   DollarSign,
   Shield,
+  GitPullRequestArrow,
 } from 'lucide-react';
 
 interface DashboardShellProps {
@@ -30,11 +32,13 @@ interface NavSection {
 export function DashboardShell({ user, children }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const navSections = getNavSections(user.highestRole);
 
   async function handleLogout() {
     await fetch('/api/v1/auth/logout', { method: 'POST' });
+    queryClient.clear();
     router.push('/login');
   }
 
@@ -59,7 +63,8 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
               </p>
               <div className="space-y-0.5">
                 {section.items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  const isActive = pathname === item.href || 
+                    (pathname.startsWith(item.href + '/') && !section.items.some(other => other.href !== item.href && other.href.startsWith(item.href + '/')));
                   return (
                     <Link
                       key={item.href}
@@ -83,8 +88,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         {/* User info + Logout */}
         <div className="p-3 border-t bg-muted/30">
           <div className="px-3 mb-2">
-            <p className="text-sm font-medium truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground">{user.employeeId}</p>
+            <p className="text-sm font-medium truncate">{user.email}</p>
           </div>
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
@@ -102,11 +106,12 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
 function getNavSections(role: string): NavSection[] {
   const sections: NavSection[] = [];
 
-  // Everyone gets My Bookings
+  // Everyone gets My Bookings + My Change Requests
   sections.push({
     title: 'Employee',
     items: [
       { href: '/dashboard/user', label: 'My Bookings', icon: Car },
+      { href: '/dashboard/user/change-requests', label: 'My Change Requests', icon: GitPullRequestArrow },
     ],
   });
 

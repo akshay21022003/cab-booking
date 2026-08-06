@@ -88,7 +88,7 @@ export default function AdminExportPage() {
           </div>
 
           <div className="mt-4 text-xs text-muted-foreground">
-            <p>Includes: Employee name, ID, cab facility, booking type, locations, times, cost center.</p>
+            <p>Includes: Employee email, cab facility, booking type, locations, times, cost center.</p>
           </div>
         </CardContent>
       </Card>
